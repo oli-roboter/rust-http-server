@@ -5,21 +5,32 @@ use std::error::Error;
 use std::fmt::{ Display, Debug, Formatter, Result as FmtResult };
 use std::str;
 use std::str::Utf8Error;
+use super::QueryString;
 
 // Example HTTP request: GET /search?name=abc&sort=1HTTP/1.1\r\n...HEADERS
-pub struct Request {
-    path: String,
-    query_string: Option<String>,
+#[derive(Debug)]
+pub struct Request<'buf> {
+    path: &'buf str,
+    query_string: Option<QueryString<'buf>>,
     method: Method,
 }
 
-impl Request {
-    // Convers the buffer of u8 received in the stream to a Request
-    // fn from_byte_array(buf: &[u8]) -> Result<Self, String> {}
+impl<'buf> Request<'buf> {
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+
+    pub fn method(&self) -> &Method {
+        &self.method
+    }
+
+    pub fn query_string(&self) -> Option<&QueryString> {
+        self.query_string.as_ref()
+    }
 }
 
 // implementing the TryFrom trait for the Request type
-impl TryFrom<&[u8]> for Request {
+impl<'buf> TryFrom<&'buf [u8]> for Request<'buf> {
     type Error = ParseError;
 
     /*
@@ -27,7 +38,7 @@ impl TryFrom<&[u8]> for Request {
     fn try_from(value: T) -> Result<Self, Self::Error>;
     Adapting the copied function for this case:
      */
-    fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {
+    fn try_from(buf: &'buf [u8]) -> Result<Self, Self::Error> {
         /* 
         Ways to make the same thing, from more verbose to succint
 
@@ -63,12 +74,12 @@ impl TryFrom<&[u8]> for Request {
 
         let mut query_string = None;
         if let Some(idx) = path.find('?') {
-            query_string = Some(path[idx + 1..].to_string());
+            query_string = Some(QueryString::from(&path[idx + 1..]));
             path = &path[..idx];
         }
 
         Ok(Self {
-            path: path.to_string(),
+            path,
             query_string,
             method,
         })
